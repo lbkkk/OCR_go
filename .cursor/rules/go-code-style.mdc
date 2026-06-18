@@ -1,0 +1,27 @@
+---
+description: Go coding standards for go-ocr
+globs: **/*.go
+alwaysApply: false
+---
+
+# Go Code Style
+
+- Code must be `gofmt`-clean (tabs for indentation). Pass `go vet ./...`.
+- Wrap errors with context using `fmt.Errorf("...: %w", err)`; never discard errors silently.
+- Do NOT write comments that narrate the code. Comments explain intent, trade-offs, or constraints only.
+- Exported identifiers need a doc comment starting with the identifier name.
+- Accept interfaces, return concrete structs. Define small, focused interfaces near their consumer.
+- Propagate `context.Context` as the first parameter for any I/O, exec, or network call.
+
+```go
+// BAD: silently swallow + narrating comment
+text, _ := extract(path) // extract the text
+
+// GOOD: wrap and return
+text, err := extract(ctx, path)
+if err != nil {
+    return nil, fmt.Errorf("extract %q: %w", path, err)
+}
+```
+
+- Tests are table-driven and use the standard `testing` package. Mock external deps (LLM client, OCR engine) via their interfaces.

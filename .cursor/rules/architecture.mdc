@@ -1,0 +1,28 @@
+---
+description: go-ocr architecture map and conversion pipeline
+alwaysApply: true
+---
+
+# go-ocr Architecture
+
+Pipeline: `input file -> detector -> extractor | ocr -> enricher (LLM) -> markdown renderer -> .md`
+
+## Package responsibilities
+
+- `cmd/goocr` - thin entrypoint; sets up slog and calls `internal/app/cli`.
+- `internal/app/cli` - cobra commands and flags.
+- `internal/converter` - orchestrator that wires the pipeline for a file/dir.
+- `internal/detector` - file type detection + whether a PDF has a text layer.
+- `internal/extractor/pdf`, `internal/extractor/docx` - extract text/images from digital docs.
+- `internal/ocr` - `pdftoppm` (PDF->image) + `tesseract` wrapper for scanned/image input.
+- `internal/llm` - OpenAI-compatible client (`/v1/chat/completions`), optional vision.
+- `internal/enricher` - LLM refines raw text into Markdown and describes embedded images (with fallback when no vision).
+- `internal/markdown` - renders the `document` model to Markdown.
+- `internal/config` - loads config (binary paths, OCR lang, LLM endpoint/key/model).
+- `pkg/document` - shared domain model (`Document`, `Block`, `Image`, ...).
+
+## Rules
+
+- New input formats: add an `Extractor` implementation; do not bloat the converter.
+- New OCR/LLM backends: implement the existing interface; keep the converter unchanged.
+- The `document` model is the single intermediate representation between extraction and rendering.

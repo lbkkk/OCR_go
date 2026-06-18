@@ -1,0 +1,15 @@
+---
+description: Core conventions for the go-ocr project (language, logging, secrets, layout)
+alwaysApply: true
+---
+
+# go-ocr Project Conventions
+
+- Module path: `github.com/lbkkk/OCR_go`. Import internal packages with this prefix.
+- Follow the [golang-standards/project-layout](https://github.com/golang-standards/project-layout) layout. Private logic lives in `internal/`; reusable types in `pkg/`; entrypoints in `cmd/`.
+- All code comments, identifiers, log messages, and CLI text MUST be in English. Chat explanations to the user can be in Vietnamese.
+- Logging: use the standard library `log/slog`. Do not add a third-party logging library.
+- CLI: built with `github.com/spf13/cobra`. Keep `func main()` thin; delegate to `internal/app/cli`.
+- Secrets (LLM API keys, etc.): read from environment variables or config files. NEVER hardcode or commit them. They are already ignored via `.gitignore`.
+- External binaries (`tesseract`, `pdftoppm`) are invoked via `os/exec`; always check availability and return a clear error if missing.
+- Prefer interfaces for extractors, OCR engines, renderers, and LLM clients so implementations can be swapped and mocked in tests.
