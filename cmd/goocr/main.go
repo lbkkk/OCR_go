@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/lbkkk/OCR_go/internal/app/cli"
+	"github.com/lbkkk/OCR_go/internal/delivery/cli"
 )
 
 func main() {

@@ -1,28 +1,53 @@
 ---
-description: go-ocr architecture map and conversion pipeline
+description: go-ocr / PDF Extraction Platform architecture map
 alwaysApply: true
 ---
 
-# go-ocr Architecture
+# Architecture
 
-Pipeline: `input file -> detector -> extractor | ocr -> enricher (LLM) -> markdown renderer -> .md`
+Full design lives in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
-## Package responsibilities
+Implementation is **mandatory in three phases**: **A → B → C** (all part of the project, not optional demos).
 
-- `cmd/goocr` - thin entrypoint; sets up slog and calls `internal/app/cli`.
-- `internal/app/cli` - cobra commands and flags.
-- `internal/converter` - orchestrator that wires the pipeline for a file/dir.
-- `internal/detector` - file type detection + whether a PDF has a text layer.
-- `internal/extractor/pdf`, `internal/extractor/docx` - extract text/images from digital docs.
-- `internal/ocr` - `pdftoppm` (PDF->image) + `tesseract` wrapper for scanned/image input.
-- `internal/llm` - OpenAI-compatible client (`/v1/chat/completions`), optional vision.
-- `internal/enricher` - LLM refines raw text into Markdown and describes embedded images (with fallback when no vision).
-- `internal/markdown` - renders the `document` model to Markdown.
-- `internal/config` - loads config (binary paths, OCR lang, LLM endpoint/key/model).
-- `pkg/document` - shared domain model (`Document`, `Block`, `Image`, ...).
+## Phase overview
+
+| Phase | Focus | Key tech |
+|-------|-------|----------|
+| **A** | Document core + CLI end-to-end | Tesseract, Qwen vision, Python layout/table (gRPC), enricher, markdown |
+| **B** | Platform async | PostgreSQL, MinIO, RabbitMQ, Redis, REST, WebSocket, JWT, docker-compose |
+| **C** | Production | K8s+HPA, Kafka, Prometheus/Grafana, Loki, OTel/Jaeger, CI/CD, retry/DLQ |
+
+## Hybrid OCR (scan/image pages)
+
+1. **Pass 1 — Tesseract** (offline) → draft text
+2. **Pass 2 — Qwen vision** (image + draft) → refined Markdown
+3. **Fallback** to Tesseract if Qwen fails
+
+Digital PDFs with text layer use `extractor` directly.
+
+A1 detector scans the text layer of ALL pages and classifies the file as
+`AllDigital` / `AllScan` / `Mixed`. Uniform files take a fast path (extract OR OCR for
+the whole file); only `Mixed` files use per-page routing (digital page -> extractor,
+scan page -> hybrid OCR), merged back in page order.
+
+## Layering (delivery -> usecase -> domain)
+
+- `internal/domain` — entities + ports
+- `internal/usecase` — upload / process / build
+- `internal/core` — detector, extractor, ocr, enricher, markdown, converter
+- `internal/adapter` — postgres, minio, rabbitmq, redis, kafka, llm, layout/table gRPC clients
+- `internal/delivery` — http, ws, grpc
+- `pkg/document` — shared model
+
+## Pipeline
+
+```
+detector -> extractor (digital) | hybrid OCR (scan)
+  -> layout gRPC -> table gRPC -> enricher -> markdown -> .md + assets
+```
 
 ## Rules
 
-- New input formats: add an `Extractor` implementation; do not bloat the converter.
-- New OCR/LLM backends: implement the existing interface; keep the converter unchanged.
-- The `document` model is the single intermediate representation between extraction and rendering.
+- Wire dependencies in `cmd/*/main.go`; domain must not import adapter/delivery.
+- New formats: add `Extractor`. New OCR backends: implement `ocr.Engine`.
+- Keep `internal/core` transport-agnostic (CLI, api, worker share the same core).

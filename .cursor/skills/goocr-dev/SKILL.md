@@ -1,44 +1,40 @@
 ---
 name: goocr-dev
-description: Development guide for the go-ocr CLI that converts PDF/Word to Markdown. Use when implementing, extending, or debugging go-ocr packages (detector, extractor, ocr, llm, enricher, markdown, converter) or when adding a new input format or OCR/LLM backend.
+description: Development guide for the PDF Intelligence Extraction Platform. Use when implementing Phase A/B/C tasks, hybrid OCR, platform adapters, Python layout/table services, or observability/K8s setup.
 disable-model-invocation: true
 ---
 
 # go-ocr Development Guide
 
-CLI tool converting PDF/Word (.docx) to Markdown. Module: `github.com/lbkkk/OCR_go`.
+Module: `github.com/lbkkk/OCR_go`. Full architecture: [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md).
 
-## Conversion pipeline
+## Implementation phases (all mandatory, sequential)
+
+### Phase A — Document core + CLI
+- A1 detector, A2 extractor (pdf/docx), A3 hybrid OCR (Tesseract + Qwen + HybridEngine)
+- A4 layout-service (Python gRPC), A5 table-service (Python gRPC), A6 Go gRPC clients
+- A7 enricher, A8 markdown + converter, A9 CLI, A10 tests
+
+### Phase B — Platform
+- B1-B6 adapters (postgres, minio, rabbitmq, redis, usecase)
+- B7-B9 REST + JWT + WebSocket + reprocess/search
+- B10 worker, B11 docker-compose, B12 OpenAPI
+
+### Phase C — Production
+- C1 retry/DLQ/idempotency, C2 Kafka, C3-C6 observability (Prometheus/Grafana/Loki/Jaeger)
+- C7-C9 Docker/K8s/CI-CD, C10 load test
+
+## Hybrid OCR
+
+Tesseract pass 1 → Qwen vision pass 2 (image + draft) → fallback Tesseract on error.
+
+## Pipeline
 
 ```
-input -> detector -> extractor | ocr -> enricher (LLM) -> markdown renderer -> .md
+detector -> extractor | hybrid OCR -> layout gRPC -> table gRPC -> enricher -> markdown
 ```
-
-The `pkg/document` model is the single intermediate representation. Extraction/OCR produces a `Document`; the renderer consumes it.
-
-## Phased plan
-
-1. Phase 0: environment (Go, Tesseract, Poppler, LLM endpoint).
-2. Phase 1: scaffold (go.mod, main.go, cobra root, slog). DONE.
-3. Phase 2: `pkg/document` model + interfaces (`Extractor`, `OCREngine`, `Renderer`, `ImageDescriber`, `Refiner`).
-4. Phase 3: `internal/llm` OpenAI-compatible client (+ optional vision).
-5. Phase 4: `internal/detector` (file type + PDF text-layer check).
-6. Phase 5: `internal/extractor/pdf` + `internal/extractor/docx`.
-7. Phase 6: `internal/ocr` (`pdftoppm` + `tesseract` via os/exec).
-8. Phase 7: `internal/enricher` (LLM refine text + describe images, with fallback).
-9. Phase 8: `internal/markdown` renderer.
-10. Phase 9: `internal/converter` + CLI `convert` command and flags.
-11. Phase 10: tests (mock LLM/OCR). Phase 11: build/CI/Docker/docs.
-
-## Extending
-
-- New input format: add an `Extractor` implementation under `internal/extractor/<fmt>`; register it in the converter by file type. Do not add format logic to the converter.
-- New OCR or LLM backend: implement the existing interface (`OCREngine` / LLM client); the converter stays unchanged.
-- Hybrid OCR: prefer the text layer / Tesseract result; use the LLM to refine and as a fallback when OCR confidence is low.
-- Image handling: send embedded images to `ImageDescriber` (LLM vision) for a description. If the model is text-only, fall back to OCR of the image or a placeholder.
 
 ## Conventions
 
-- English for all code/comments/CLI text. `gofmt`-clean, wrap errors with `%w`, propagate `context.Context`.
-- Secrets (LLM API key) come from env/config, never hardcoded.
-- Verify with `go build ./...` and `go test ./...` after changes.
+- English for code/comments/CLI. `gofmt`, wrap errors with `%w`, propagate `context.Context`.
+- Secrets via env/config. Verify with `go build ./...` and `go test ./...`.
